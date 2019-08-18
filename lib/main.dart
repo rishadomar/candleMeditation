@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
+import 'package:audioplayers/audio_cache.dart';
+import 'package:screen/screen.dart';
 
 void main() => runApp(VideoPlayerApp());
 
@@ -26,15 +28,17 @@ class VideoPlayerScreen extends StatefulWidget {
 class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   VideoPlayerController _controller;
   Future<void> _initializeVideoPlayerFuture;
+  Timer _timer;
+  Timer _finalTimer;
+  double _percent = 0.0;
+  int _totalTimeInSeconds = 120;
+  int _timerInterval = 5;
 
   @override
   void initState() {
     // Create and store the VideoPlayerController. The VideoPlayerController
     // offers several different constructors to play videos from assets, files,
     // or the internet.
-//    _controller = VideoPlayerController.network(
-//      'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-//    );
     _controller = VideoPlayerController.asset(
       'lib/videos/candle.mp4',
     );
@@ -56,6 +60,27 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     super.dispose();
   }
 
+  void _onTick() {
+    setState(() {
+     _percent = _percent + (100 / (_totalTimeInSeconds / _timerInterval));
+     if (_percent > 100) {
+       _percent = 100;
+     }
+     _timer = new Timer(new Duration(seconds: _timerInterval), _onTick);
+    });
+  }
+
+  void _onFinalTimeComplete() {
+    setState(() {
+      _percent = 1.0;
+      _timer.cancel();
+      _controller.pause();
+      AudioCache player = new AudioCache();
+      const alarmAudioPath = "sounds/templeBell.mp3";
+      player.play(alarmAudioPath, volume: 0.3);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     SystemChrome.setEnabledSystemUIOverlays([]);
@@ -73,6 +98,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 children: [
                   Expanded(
                     child: VideoPlayer(_controller),
+                  ),
+                  LinearProgressIndicator(
+                    value: _percent * .01,
                   ),
                 ],
             );
@@ -92,9 +120,16 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             // If the video is playing, pause it.
             if (_controller.value.isPlaying) {
               _controller.pause();
+              Screen.keepOn(false);
+              _timer.cancel();
             } else {
               // If the video is paused, play it.
               _controller.play();
+              Screen.keepOn(true);
+              _timer = new Timer(new Duration(seconds: 3), _onTick);
+              if (_finalTimer == null) {
+                _finalTimer = new Timer(new Duration(seconds: _totalTimeInSeconds), _onFinalTimeComplete);
+              }
             }
           });
         },
@@ -106,3 +141,4 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     );
   }
 }
+
