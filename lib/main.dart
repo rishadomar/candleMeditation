@@ -26,17 +26,67 @@ class VideoPlayerScreen extends StatefulWidget {
   _VideoPlayerScreenState createState() => _VideoPlayerScreenState();
 }
 
+class _Preferences {
+  final String _showProgressText = "showProgress";
+  final String _playSoundAtEndText = "playSoundAtEnd";
+  final String _playingTimeText = "playingTime";
+
+  // read prefs - if not there set default values
+  // be able to write prefs
+
+  /// ------------------------------------------------------------
+  /// Method that returns the user decision to allow notifications
+  /// ------------------------------------------------------------
+  Future<bool> getShowProgress() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_showProgressText) ?? false;
+  }
+
+  Future<bool> getPlaySoundAtEnd() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_playSoundAtEndText) ?? false;
+  }
+
+  Future<int> getPlayingTime() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_playingTimeText) ?? false;
+  }
+
+  /// ------------------------------------------------------------
+  /// Method that returns the user decision to allow notifications
+  /// ------------------------------------------------------------
+  Future<bool> setShowProgress(bool value) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.setBool(_showProgressText, value);
+  }
+
+  Future<bool> setPlaySoundAtEnd(bool value) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.setBool(_playSoundAtEndText, value);
+  }
+
+  Future<bool> setPlayingTime(int value) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.setInt(_playingTimeText, value);
+  }
+}
+
 class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   VideoPlayerController _videoPlayerController;
   Future<void> _initializeVideoPlayerFuture;
   Timer _timer;
-  Timer _finalTimer;
   double _percent = 0.0;
-  int _totalTimeInSeconds = 20;
+  int _playingTime = 5; // minutes
   int _timerInterval = 5;
-  double _sliderValue = 2.0;
   bool _showProgress = true;
   bool _playSoundAtEnd = true;
+  _Preferences _preferences = new _Preferences();
+
+  Future<void> _loadPreferences() async {
+    _showProgress = await _preferences.getShowProgress();
+    _playingTime = await _preferences.getPlayingTime();
+    _playSoundAtEnd = await _preferences.getPlaySoundAtEnd();
+  }
 
   @override
   void initState() {
@@ -53,6 +103,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     // Use the controller to loop the video.
     _videoPlayerController.setLooping(true);
 
+    _loadPreferences();
+
     super.initState();
   }
 
@@ -65,34 +117,62 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 
   void _onTick() {
-    setState(() {
-      _percent = _percent + (100 / (_totalTimeInSeconds / _timerInterval));
-      if (_percent > 100) {
+    double progressValue = _percent + (100 / ((_playingTime * 60) / _timerInterval));
+    if (_showProgress) {
+      setState(() {
+        if (progressValue > 100) {
+          _percent = 100;
+        } else {
+          _percent = progressValue;
+        }
+      });
+    } else {
+      if (progressValue > 100) {
         _percent = 100;
+      } else {
+        _percent = progressValue;
       }
+    }
+    if (_percent >= 100) {
+      _allDone();
+    } else {
       _timer = new Timer(new Duration(seconds: _timerInterval), _onTick);
-    });
+    }
   }
 
-  void _onFinalTimeComplete() {
+  void _allDone() {
     setState(() {
-      _percent = 1.0;
+      _percent = 0.0;
       _timer.cancel();
       _videoPlayerController.pause();
       Screen.keepOn(false);
-      AudioCache player = new AudioCache();
-      const alarmAudioPath = "sounds/templeBell.mp3";
-      player.play(alarmAudioPath, volume: 0.3);
-      _finalTimer = null;
+      if (_playSoundAtEnd) {
+        AudioCache player = new AudioCache();
+        const alarmAudioPath = "sounds/templeBell.mp3";
+        player.play(alarmAudioPath, volume: 0.3);
+      }
     });
   }
 
-  void _onSwitchChange(bool newValue) {
+  void _onShowProgressChange(bool newValue) {
     _showProgress = newValue;
+    _preferences.setShowProgress(newValue);
   }
 
   void _onPlaySoundAtEndChange(bool newValue) {
     _playSoundAtEnd = newValue;
+    _preferences.setPlaySoundAtEnd(newValue);
+  }
+
+  void _onPlayingTimeChanged(double newValue) {
+    int minutes = newValue.round();
+    if (_playingTime > 0) {
+      _percent = (_percent * newValue) / (_playingTime * 60);
+    }
+    _preferences.setPlayingTime(minutes);
+    setState(() {
+      _playingTime = minutes;
+    });
   }
 
   Drawer _makeDrawer() {
@@ -122,17 +202,15 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                     children: <Widget>[
                       Icon(Icons.timer),
                       Text('Session Time'),
-                      Text(_sliderValue.toStringAsFixed(0) + ' minutes')
+                      Text((_playingTime).toStringAsFixed(0) + ' minutes')
                     ],
                   ),
                   Slider(
                     activeColor: Colors.indigoAccent,
                     min: 0.0,
                     max: 15.0,
-                    onChanged: (newRating) {
-                      setState(() => _sliderValue = newRating);
-                    },
-                    value: _sliderValue,
+                    onChanged: _onPlayingTimeChanged,
+                    value: _playingTime.toDouble(),
                   ),
                   Divider(),
                   Row(
@@ -142,7 +220,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                       Text('Show progress?'),
                       Switch(
                         value: _showProgress,
-                        onChanged: _onSwitchChange,
+                        onChanged: _onShowProgressChange,
                       )
                     ],
                   ),
@@ -215,11 +293,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
               _videoPlayerController.play();
               Screen.keepOn(true);
               _timer = new Timer(new Duration(seconds: 3), _onTick);
-              if (_finalTimer == null) {
-                _finalTimer = new Timer(
-                    new Duration(seconds: _totalTimeInSeconds),
-                    _onFinalTimeComplete);
-              }
             }
           });
         },
