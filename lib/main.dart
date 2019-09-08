@@ -14,6 +14,12 @@ class VideoPlayerApp extends StatelessWidget {
 	Widget build(BuildContext context) {
 		return MaterialApp(
 			title: 'Candle',
+			theme: ThemeData(
+				// Define the default Brightness and Colors
+				brightness: Brightness.dark,
+				primaryColor: Colors.lightBlue[800],
+				accentColor: Colors.cyan[600],
+			),
 			home: VideoPlayerScreen(),
 		);
 	}
@@ -91,6 +97,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
 	@override
 	void initState() {
+		print('In Init State ... ');
 		// Create and store the VideoPlayerController. The VideoPlayerController
 		// offers several different constructors to play videos from assets, files,
 		// or the internet.
@@ -183,7 +190,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 		// space to fit everything.
 		return Drawer(
 			child: Container(
-				color: const Color(0xFF004D40),
+				//color: const Color(0xFF004D40),
 				child: ListView(
 					// Important: Remove any padding from the ListView.
 					padding: EdgeInsets.zero,
@@ -256,48 +263,74 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 	Widget build(BuildContext context) {
 		SystemChrome.setEnabledSystemUIOverlays([]);
 		Size size = MediaQuery.of(context).size;
+		print('Init: in build');
+		var scaffoldKey = GlobalKey<ScaffoldState>();
 		return Scaffold(
 			// Use a FutureBuilder to display a loading spinner while waiting for the
 			// VideoPlayerController to finish initializing.
+//			appBar: _videoPlayerController.value.isPlaying ? null : AppBar(
+//				title: Text("Candle"),
+//			),
+			key: scaffoldKey,
 			drawer: _makeDrawer(),
-			body: FutureBuilder(
-				future: _initializeVideoPlayerFuture,
-				builder: (context, snapshot) {
-					if (snapshot.connectionState == ConnectionState.done) {
-						// If the VideoPlayerController has finished initialization, use
-						// the data it provides to limit the aspect ratio of the video.
-						return Container(
-							color: const Color(0xFF000000),
-							child: Column(
-								// Use the VideoPlayer widget to display the video.
-								children: [
-									SizedBox(
-										height: 100,
+			body: Stack(
+				children: <Widget> [
+					FutureBuilder(
+						future: _initializeVideoPlayerFuture,
+						builder: (context, snapshot) {
+							bool isPortrait = MediaQuery
+								.of(context)
+								.orientation == Orientation.portrait;
+							if (snapshot.connectionState ==
+								ConnectionState.done) {
+								// If the VideoPlayerController has finished initialization, use
+								// the data it provides to limit the aspect ratio of the video.
+								return Container(
+									//color: const Color(0xFF000000),
+									child: Column(
+										// Use the VideoPlayer widget to display the video.
+										children: [
+											SizedBox(
+												height: isPortrait ? 100 : 30,
+											),
+											Align(
+												alignment: Alignment.center,
+												child: SizedBox(
+													width: size.width * 0.9,
+													height: isPortrait
+														? 442.0
+														: 300,
+													child: VideoPlayer(
+														_videoPlayerController),
+												),
+											),
+											_linearProgressIndicator =
+												Visibility(
+													visible: _showProgress,
+													child: LinearProgressIndicator(
+														value: _percent * .01,
+													),
+												),
+										],
 									),
-									Align(
-										alignment: Alignment.center,
-										child: SizedBox(
-											width: size.width * 0.9,
-											height: 442.0,
-											child: VideoPlayer(_videoPlayerController),
-										),
-									),
-									_linearProgressIndicator = Visibility(
-										visible: _showProgress,
-										child: LinearProgressIndicator(
-											value: _percent * .01,
-										),
-									),
-								],
-							),
-						);
-						//return VideoPlayer(_controller);
-					} else {
-						// If the VideoPlayerController is still initializing, show a
-						// loading spinner.
-						return Center(child: CircularProgressIndicator());
-					}
-				},
+								);
+							} else {
+								// If the VideoPlayerController is still initializing, show a
+								// loading spinner.
+								return Center(
+									child: CircularProgressIndicator());
+							}
+						},
+					),
+					Positioned(
+						left: 10,
+						top: 20,
+						child: IconButton(
+							icon: Icon(Icons.menu),
+							onPressed: () => scaffoldKey.currentState.openDrawer(),
+						),
+					),
+				],
 			),
 			floatingActionButton: FloatingActionButton(
 				onPressed: () {
